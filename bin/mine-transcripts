@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# mine-transcripts <project-slug-or-dir>
+# Finds transcripts newer than the latest ADR and asks Claude (headless) to propose
+# promotions: new ADRs, CHANGELOG entries, PRINCIPLES amendments. Proposals only; it
+# writes a report, a human (or an interactive session) applies them.
+set -euo pipefail
+
+ARG="${1:?usage: mine-transcripts <project-slug-or-dir>}"
+DIR="$ARG"; [ -d "$DIR" ] || DIR="$HOME/projects/$ARG"
+[ -d "$DIR/transcripts" ] || { echo "error: $DIR/transcripts not found" >&2; exit 1; }
+
+# Cutoff = date of the newest ADR (frontmatter date), else epoch
+CUTOFF="1970-01-01"
+if [ -d "$DIR/decisions" ]; then
+  D=$(grep -h '^date:' "$DIR"/decisions/[0-9]*.md 2>/dev/null | awk '{print $2}' | sort | tail -1 || true)
+  [ -n "${D:-}" ] && CUTOFF="$D"
+fi
+
+NEW=$(find "$DIR/transcripts" -name '[0-9][0-9][0-9][0-9]-*.md' -newermt "$CUTOFF" | sort)
+[ -z "$NEW" ] && { echo "no transcripts newer than latest ADR ($CUTOFF)"; exit 0; }
+
+echo "mining $(echo "$NEW" | wc -l) transcript(s) newer than $CUTOFF..."
+
+REPORT="$DIR/output/transcript-mining-$(date +%F).md"
+mkdir -p "$DIR/output"
+
+claude -p "You are mining project transcripts for decisions. Project: $DIR.
+Read docs/PRINCIPLES.md, decisions/README.md, and every active ADR in decisions/ to know what
+is already decided. Then read these transcripts:
+$NEW
+
+For each DECISION found in a transcript, classify it:
+- Already covered by an active ADR: note it, no action.
+- Contradicts an active ADR: flag it loudly as a conflict to resolve.
+- New and ADR-worthy (expensive to reverse, or re-litigatable): draft the full ADR body
+  (Decision / Alternatives ruled out / Why) ready to paste.
+- Worth a CHANGELOG line only: draft the line.
+Output a markdown report with sections: Conflicts, Proposed ADRs, Proposed CHANGELOG entries,
+Already covered. Do not edit any files." > "$REPORT"
+
+echo "report: $REPORT"

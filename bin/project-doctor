@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# project-doctor
+# Drift report across ~/projects/: missing scaffold files, stale changelogs, draft ADRs,
+# over-budget CLAUDE.md files, unregistered projects. Report only; fixes are a human call.
+set -euo pipefail
+
+ROOT="$HOME/projects"
+TODAY=$(date +%s)
+ISSUES=0
+
+note() { ISSUES=$((ISSUES+1)); printf '  %s\n' "$1"; }
+
+for d in "$ROOT"/*/; do
+  slug="$(basename "$d")"
+  # archived/superseded projects are exempt from scaffold completeness
+  if [ -f "$d/ONBOARDING.md" ]; then
+    st=$(awk '$1=="status:" { $1=""; sub(/^ /,""); print; exit }' "$d/ONBOARDING.md")
+    case "$st" in active|"") ;; *) continue ;; esac
+  fi
+  out=""
+  [ -f "$d/CLAUDE.md" ]     || out="$out  missing CLAUDE.md\n"
+  [ -f "$d/ONBOARDING.md" ] || out="$out  missing ONBOARDING.md (project is invisible to project-index)\n"
+  [ -f "$d/CHANGELOG.md" ]  || out="$out  missing CHANGELOG.md\n"
+  [ -d "$d/decisions" ]     || out="$out  missing decisions/\n"
+
+  if [ -f "$d/CLAUDE.md" ]; then
+    lines=$(wc -l < "$d/CLAUDE.md")
+    [ "$lines" -gt 80 ] && out="$out  CLAUDE.md is $lines lines (budget ~80; move facts to ONBOARDING/ADRs)\n"
+  fi
+
+  if [ -f "$d/CHANGELOG.md" ]; then
+    last=$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$d/CHANGELOG.md" | sort | tail -1 || true)
+    if [ -n "$last" ] && [ -d "$d/.git" ]; then
+      lastcommit=$(git -C "$d" log -1 --format=%cs 2>/dev/null || true)
+      if [ -n "$lastcommit" ] && [ "$lastcommit" \> "$last" ]; then
+        out="$out  CHANGELOG stale: last entry $last but last commit $lastcommit\n"
+      fi
+    fi
+  fi
+
+  if [ -d "$d/decisions" ]; then
+    drafts=$(grep -l '^status: draft' "$d"/decisions/[0-9]*.md 2>/dev/null || true)
+    [ -n "$drafts" ] && out="$out  draft ADRs awaiting promotion: $(echo "$drafts" | xargs -n1 basename | tr '\n' ' ')\n"
+  fi
+
+  if [ -n "$out" ]; then
+    echo "$slug:"
+    printf '%b' "$out"
+    ISSUES=$((ISSUES+1))
+  fi
+done
+
+[ "$ISSUES" -eq 0 ] && echo "all projects healthy" || echo "(run project-index to refresh ~/projects.md)"

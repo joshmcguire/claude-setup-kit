@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# new-project <slug> "Name" "one-line description"
+# Scaffolds ~/projects/<slug>/ from ~/templates/project/ and registers it in ~/projects.md.
+set -euo pipefail
+
+SLUG="${1:?usage: new-project <slug> \"Name\" \"description\"}"
+NAME="${2:?usage: new-project <slug> \"Name\" \"description\"}"
+DESC="${3:?usage: new-project <slug> \"Name\" \"description\"}"
+ROOT="$HOME/projects/$SLUG"
+TPL="$HOME/templates/project"
+INDEX="$HOME/projects.md"
+DATE="$(date +%F)"
+
+[ -e "$ROOT" ] && { echo "error: $ROOT already exists" >&2; exit 1; }
+[ -d "$TPL" ] || { echo "error: template dir $TPL missing" >&2; exit 1; }
+
+cp -r "$TPL" "$ROOT"
+
+# Fill placeholders in every template file
+find "$ROOT" -type f -name '*.md' -exec sed -i \
+  -e "s/{{NAME}}/$(printf '%s' "$NAME" | sed 's/[&/\]/\\&/g')/g" \
+  -e "s/{{DESCRIPTION}}/$(printf '%s' "$DESC" | sed 's/[&/\]/\\&/g')/g" \
+  -e "s/{{DATE}}/$DATE/g" {} +
+
+# Register: the index is generated from ONBOARDING frontmatter (which the template just
+# stamped), so regeneration IS registration. Fallback: append a row by hand.
+if command -v project-index >/dev/null 2>&1; then
+  project-index
+elif [ -x "$HOME/bin/project-index" ]; then
+  "$HOME/bin/project-index"
+else
+  ROW="| $NAME | \`~/projects/$SLUG/\` | $DESC | [ONBOARDING.md](projects/$SLUG/ONBOARDING.md) |"
+  awk -v row="$ROW" '
+    { lines[NR] = $0
+      if ($0 ~ /^## Archived/ && !arch) arch = NR
+      if ($0 ~ /^\|/ && !arch) lasttab = NR }
+    END {
+      for (i = 1; i <= NR; i++) { print lines[i]; if (i == lasttab) print row }
+      if (!lasttab) print row
+    }' "$INDEX" > "$INDEX.tmp" && mv "$INDEX.tmp" "$INDEX"
+fi
+
+git -C "$ROOT" init -q 2>/dev/null || true
+
+echo "scaffolded $ROOT and registered in $INDEX"
+echo "next: fill in CLAUDE.md (stack, hard rules) and docs/PRINCIPLES.md (mission, values)"

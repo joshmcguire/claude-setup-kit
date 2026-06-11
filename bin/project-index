@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# project-index
+# Regenerates ~/projects.md from the frontmatter of each ~/projects/*/ONBOARDING.md.
+# The index is a build artifact: never hand-edit it, fix the project's frontmatter instead.
+# Projects without ONBOARDING.md are listed in an "Unregistered" section so drift is visible.
+set -euo pipefail
+
+ROOT="$HOME/projects"
+INDEX="$HOME/projects.md"
+TMP="$(mktemp)"
+
+frontmatter() { # frontmatter <file> <key>
+  awk -v key="$2" '
+    NR==1 && $0!="---" { exit }
+    NR>1 && $0=="---" { exit }
+    $1==key":" { sub("^"key": *",""); print; exit }
+  ' "$1"
+}
+
+{
+  echo "# Projects"
+  echo
+  echo "When a project is mentioned, find it here and read its CLAUDE.md + last ~10 CHANGELOG"
+  echo "entries. GENERATED FILE: run \`project-index\` after adding or archiving a project;"
+  echo "edit each project's ONBOARDING.md frontmatter, not this table."
+  echo
+  echo "## Active Projects"
+  echo
+  echo "| Project | Path | What it is | Onboarding |"
+  echo "|---------|------|-----------|------------|"
+} > "$TMP"
+
+ARCHIVED=""; UNREG=""
+for d in "$ROOT"/*/; do
+  slug="$(basename "$d")"
+  ob="$d/ONBOARDING.md"
+  if [ ! -f "$ob" ]; then
+    UNREG="$UNREG- \`~/projects/$slug/\` (no ONBOARDING.md)\n"
+    continue
+  fi
+  name="$(frontmatter "$ob" name)"; [ -n "$name" ] || name="$slug"
+  desc="$(frontmatter "$ob" description)"
+  status="$(frontmatter "$ob" status)"; [ -n "$status" ] || status="active"
+  row="| $name | \`~/projects/$slug/\` | $desc | [ONBOARDING.md](projects/$slug/ONBOARDING.md) |"
+  case "$status" in
+    active) echo "$row" >> "$TMP" ;;
+    *) ARCHIVED="$ARCHIVED| $name | \`~/projects/$slug/\` | $desc | $status |\n" ;;
+  esac
+done
+
+{
+  echo
+  echo "## Archived / superseded"
+  echo
+  echo "| Project | Path | What it was | Status |"
+  echo "|---------|------|-------------|--------|"
+  printf '%b' "$ARCHIVED"
+  if [ -n "$UNREG" ]; then
+    echo
+    echo "## Unregistered (fix me: add ONBOARDING.md with frontmatter, or delete the folder)"
+    echo
+    printf '%b' "$UNREG"
+  fi
+} >> "$TMP"
+
+mv "$TMP" "$INDEX"
+echo "regenerated $INDEX"

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# new-adr <slug> [project-dir]
+# Creates decisions/NNNN-<slug>.md with the next number and reminds about the index table.
+# Run from inside a project, or pass the project dir as the second arg.
+set -euo pipefail
+
+SLUG="${1:?usage: new-adr <slug> [project-dir]}"
+DIR="${2:-.}"
+DEC="$DIR/decisions"
+[ -d "$DEC" ] || { echo "error: $DEC not found (run from a project root)" >&2; exit 1; }
+
+LAST=$(ls "$DEC" | grep -oE '^[0-9]{4}' | sort -n | tail -1 || true)
+NEXT=$(printf '%04d' $(( ${LAST:-0} + 1 )))
+FILE="$DEC/$NEXT-$SLUG.md"
+
+cat > "$FILE" <<EOF
+---
+status: active
+date: $(date +%F)
+---
+
+# $NEXT — TITLE (full sentence stating the decision)
+
+## Decision
+
+## Alternatives ruled out
+
+## Why
+EOF
+
+echo "created $FILE"
+echo "remember: add a row to $DEC/README.md index table"

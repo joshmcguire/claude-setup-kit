@@ -1,0 +1,20 @@
+{
+  "_comment": "Merge the hooks key into ~/.claude/settings.json on the new machine. On Windows, replace ~ with the absolute home path using forward slashes, e.g. bash C:/Users/<you>/.claude/hooks/show-projects.sh",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/show-projects.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/project-status.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
