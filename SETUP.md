@@ -1,100 +1,97 @@
-# Claude Code setup kit: project system bootstrap
+# Setup: install details and per-OS notes
 
-A portable, battle-tested structure for running many projects with Claude Code: one generated
-index, a standard per-project file layout, ADRs for decisions, and hooks that orient every
-session automatically. Copy this folder to your machine and follow the steps, or just tell
-Claude Code: "read SETUP.md in this folder and install it for me".
+The fast path is `./install.sh` (see [README.md](README.md)). This file covers what the
+installer does, the manual fallback, and per-OS specifics. Easiest of all: open Claude Code
+in this folder and say "read SETUP.md and install this for my machine".
 
-## What the system is (30 seconds)
+## What install.sh does
 
-- **One index**: `~/projects.md` lists every project (name, path, one-liner, onboarding link).
-  Claude reads it to route any request to the right folder. Registration is mandatory.
-- **One structure per project**: thin `CLAUDE.md` (how we work here), `ONBOARDING.md`
-  (orientation), `CHANGELOG.md` (dated resume points), `docs/PRINCIPLES.md` (north-star values
-  every choice is tested against), `decisions/` (numbered ADRs, the architecture of record),
-  `transcripts/` (dated raw notes, mined for decisions).
-- **One workflow everywhere**: session start reads CLAUDE.md + CHANGELOG; architecture goes
-  through PRINCIPLES then ADRs; work goes branch-per-issue with auto-filed issues and
-  `Closes #` PRs once a project is deployed; every session appends to the CHANGELOG; clear
-  points come with a pasteable next prompt.
+1. **Dependency check**: `git`, `jq`, `awk` (jq powers the hooks and the settings merge).
+   On macOS it prints the exact `brew install` line for anything missing.
+2. **Scripts** → `~/.local/bin/` (overwrites; scripts are kit-owned), warns if that dir is
+   not on PATH.
+3. **Hooks** → `~/.claude/hooks/` (`show-toolkit.sh` is per-machine content: installed once,
+   local edits never overwritten).
+4. **Project template** → `~/templates/project/` (only if missing; drift is sync-kit's job).
+5. **CLAUDE.md baselines** → `~/CLAUDE.md` and `~/.claude/CLAUDE.md` (only if missing; an
+   existing file is never clobbered).
+6. **settings.json**: backs it up, then additively merges the SessionStart / PostToolUse /
+   Stop hook entries with absolute paths (skips any already wired). The reference snippet is
+   `hooks/settings-hooks-snippet.json`.
+7. Creates `~/projects/`, generates `~/projects.md`, and records the kit location in
+   `~/.config/claude-setup-kit/path` so `sync-kit` can find the repo.
+8. Optional: `--with-research` (copies `research/` + `commands/`, runs `npm install`; then
+   run `node ~/.claude/research/setup-auth.js` once to log in to claude.ai),
+   `--with-memory <dir>` (imports memory files; personal machines only).
 
-The machine-wide rules live in `home/CLAUDE.md`. Project facts live only in project folders.
-That separation is the whole trick: the global file stays small and stable, projects stay
-self-describing, and nothing has to be loaded into context until it is needed.
+After installing: fill in the machine-specific section at the bottom of `~/CLAUDE.md`
+(OS/shell, sudo or admin policy, git host and CLI, anything confidential to this machine),
+edit `~/.claude/hooks/show-toolkit.sh` to list this machine's commands, then create the first
+project with `new-project <slug> "Name" "description"` and spend ten minutes making its
+`docs/PRINCIPLES.md` real. The system only pays off if PRINCIPLES is not boilerplate.
 
-## Design rule (learned the hard way)
+## The two-layer CLAUDE.md model
 
-Anything that depends on remembering eventually drifts. So in this kit the project index and
-ADR index tables are **generated, never hand-edited**, scaffolding and registration are **one
-command**, and session orientation is a **hook**, not a "please read X" rule. See
-`IMPROVEMENTS.md` for the audit findings this came from.
+Both CLAUDE.md files contain this marker line:
 
-## Install steps
+```
+<!-- ===== MACHINE-SPECIFIC BELOW: sync-kit compares only above this line ===== -->
+```
 
-1. **Global style rules**: copy `global-claude/CLAUDE.md` to `~/.claude/CLAUDE.md`. Adjust the
-   style rules to taste; they are examples of the kind of thing that belongs there.
-2. **Machine rules**: copy `home/CLAUDE.md` to `~/CLAUDE.md`. Then fill in the
-   "Machine-specific notes" section at the bottom (sudo/admin policy, git host and CLI,
-   anything that must not leave the machine). This matters most on a work computer.
-3. **Templates**: copy `templates/project/` to `~/templates/project/`.
-4. **Scripts**: copy `bin/` to `~/bin/` (ensure `~/bin` is on PATH) and `chmod +x ~/bin/*`.
-   - `new-project <slug> "Name" "description"`: scaffolds a project from the template,
-     git-inits, and registers it in the index. One command = fully in the system.
-   - `project-index`: regenerates `~/projects.md` from each project's ONBOARDING.md
-     frontmatter. The index is a build artifact; unregistered folders show up loudly.
-   - `new-adr <slug>`: creates the next-numbered ADR in the current project.
-   - `adr-index`: regenerates the decisions/README.md table from the ADR files.
-   - `project-doctor`: drift report (missing files, stale changelogs, draft ADRs, fat
-     CLAUDE.md files).
-   - `mine-transcripts <project>`: headless `claude -p` pass over transcripts newer than the
-     latest ADR; writes a proposals report (conflicts, draft ADRs, changelog lines).
-5. **Hooks**: copy `hooks/*.sh` to `~/.claude/hooks/` (`chmod +x`), then merge
-   `hooks/settings-hooks-snippet.json` into `~/.claude/settings.json`.
-   - `show-projects.sh` (SessionStart): greets every session with the live project list.
-   - `project-status.sh` (SessionStart): when a session starts inside a project, prints the
-     last 3 CHANGELOG entries, the `NEXT:` step, draft ADRs, branch, and dirty-file count.
-6. **Index**: run `project-index` once to create `~/projects.md` (it will be empty until the
-   first project exists).
-7. **First project**: run `new-project`, then spend ten minutes filling in `docs/PRINCIPLES.md`
-   (mission + 3-6 non-negotiable values) and the Hard rules section of its `CLAUDE.md`. The
-   system only pays off if PRINCIPLES is real, not boilerplate.
+Above the marker: the shared baseline, owned by this repo, compared by `sync-kit status` and
+updated by `sync-kit push`/`pull`. Below the marker: this machine's own rules, never touched
+by sync. Improve something generic? It belongs above the marker and gets pulled into the repo
+so every machine benefits. Add something local (a tray integration, a compliance rule, a
+machine's GPU policy)? Below the marker, permanently safe.
+
+## macOS notes
+
+- Everything is plain bash + awk + git + jq; the scripts avoid GNU-only constructs
+  (no `sed -i` without suffix, no `find -newermt`, no `xargs -r`, no `tac`).
+- Dependencies: `brew install jq` (git ships with Xcode CLT; node only if using
+  `--with-research`).
+- Notifications use the `claude-notify` shim: `osascript` on macOS, `notify-send` on Linux,
+  silent no-op elsewhere. No setup needed.
+- Linux-desktop extras degrade gracefully: the Hyprland attention-queue part of
+  `claude-done-notify` switches itself off when `hyprctl` is absent.
 
 ## Windows notes
 
-Everything in this kit is plain bash + awk + git, and Claude Code on Windows already requires
-Git for Windows, so the scripts and hooks run unchanged under Git Bash. Specifics:
+Claude Code on Windows already requires Git for Windows, so everything runs under Git Bash:
 
-- **Home directory**: `~` in Git Bash is `C:\Users\<you>`. All paths in the kit (`~/projects/`,
-  `~/projects.md`, `~/templates/`, `~/bin/`, `~/.claude/`) land there.
-- **PATH**: Git Bash automatically adds `~/bin` to PATH if the folder exists; create it, copy
-  the scripts in, and start a new session.
-- **chmod**: harmless but not required on Windows; Git Bash runs the scripts via their
-  shebang line regardless.
-- **Hook commands**: in `settings.json`, use an absolute path with forward slashes so the
-  command works no matter which shell invokes it, e.g.
-  `bash C:/Users/<you>/.claude/hooks/show-projects.sh`. (On macOS/Linux the
-  `bash ~/.claude/hooks/...` form in the snippet is fine as-is.)
-- **Line endings**: the scripts must keep LF endings. If you cloned this kit through git with
-  `core.autocrlf=true`, run `dos2unix` on `bin/*` and `hooks/*.sh`, or re-copy the files.
-- Easiest path: tell Claude Code "read SETUP.md and install this for my machine" and let it
-  handle the path substitutions.
+- **Home directory**: `~` in Git Bash is `C:\Users\<you>`. All kit paths land there.
+- **Run the installer from Git Bash**: `bash install.sh`.
+- **Hook commands**: the installer writes absolute paths; if editing by hand use forward
+  slashes, e.g. `bash C:/Users/<you>/.claude/hooks/show-projects.sh`.
+- **chmod**: harmless but not required; Git Bash runs scripts via their shebang regardless.
+- **Line endings**: scripts must keep LF endings. If cloned with `core.autocrlf=true`, run
+  `dos2unix` on `bin/*` and `hooks/*.sh`, or re-clone with `core.autocrlf=input`.
 
 ## Work-computer adaptations (do these consciously)
 
-- **Git host**: if it is GitHub Enterprise or GitLab, set the host and CLI (`gh`/`glab`) in
-  `~/CLAUDE.md` Machine-specific notes; the issue/branch/PR workflow is host-agnostic.
-- **Sudo / admin rights**: state the real policy explicitly in Machine-specific notes so
-  Claude does not assume autonomy it does not have.
+- **Git host**: if it is GitHub Enterprise or GitLab, set the host and CLI (`gh`/`glab`) below
+  the marker in `~/CLAUDE.md`; the issue/branch/PR workflow is host-agnostic.
+- **Sudo / admin rights**: state the real policy explicitly so Claude does not assume autonomy
+  it does not have.
 - **Confidentiality**: add a line listing what must never go to external services (client
   names, internal URLs, credentials). Claude treats `~/CLAUDE.md` as binding.
+- **Memory**: do NOT use `--with-memory` on a work machine; personal memory stays personal.
 - **Commit policy**: on a repo with reviewers, set "only commit when asked" in that project's
   CLAUDE.md; for solo projects, auto-commit at working checkpoints is a fine default.
+
+## Manual install (no installer)
+
+Copy `bin/*` → `~/.local/bin/` (+`chmod +x`), `hooks/*.sh` → `~/.claude/hooks/` (+`chmod +x`),
+`templates/project/` → `~/templates/project/`, `global-claude/CLAUDE.md` → `~/.claude/CLAUDE.md`,
+`home/CLAUDE.md` → `~/CLAUDE.md`. Merge `hooks/settings-hooks-snippet.json` into
+`~/.claude/settings.json`. Run `project-index` once. Write the kit's absolute path into
+`~/.config/claude-setup-kit/path`.
 
 ## Maintenance habits that keep it healthy
 
 - New project: always via `new-project`, even for experiments (mark them in the description).
 - End of session: CHANGELOG entry. Decision made: ADR. New raw notes: dated file in
   `transcripts/`, then mine it.
+- Weekly (or when asked for a health check): `project-doctor` — it now also reports setup-kit
+  drift via `sync-kit status`.
 - ONBOARDING.md is allowed to lag; CLAUDE.md, PRINCIPLES, and ADRs are not.
-- See `IMPROVEMENTS.md` for the known weaknesses of the original setup and what this kit
-  already fixes vs what is still open.

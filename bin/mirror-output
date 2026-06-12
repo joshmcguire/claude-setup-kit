@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# PostToolUse hook (Write|Edit): two jobs, both silent, never fail the hook.
+# 1. Mirror any file Claude writes under */output/* into ~/claude-outputs/
+#    as <project>--<filename>  (deliverables, the curated set).
+# 2. Log EVERY Write-tool save (any path) to ~/.cache/claude-writes.tsv so tooling
+#    can offer recent Claude-written files at their real paths.
+# Requires: jq. Portable (no GNU-only tools).
+
+# reverse lines portably (tac is GNU-only, absent on macOS)
+rev_lines() { awk '{a[NR]=$0} END{for(i=NR;i>0;i--) print a[i]}'; }
+
+{
+    input=$(cat)
+    fp=$(jq -r '.tool_input.file_path // empty' <<<"$input")
+    tool=$(jq -r '.tool_name // empty' <<<"$input")
+    [ -n "$fp" ] && [ -f "$fp" ] || exit 0
+
+    # --- 2: recent-writes log (Write only: created/produced files, not code edits)
+    if [ "$tool" = "Write" ]; then
+        log="$HOME/.cache/claude-writes.tsv"
+        mkdir -p "$HOME/.cache"
+        printf '%s\t%s\n' "$(date +%s)" "$fp" >> "$log"
+        # prune: newest 300 lines, drop duplicate paths (keep last occurrence)
+        rev_lines < "$log" | awk -F'\t' '!seen[$2]++' | head -n 300 | rev_lines > "$log.tmp" \
+            && mv "$log.tmp" "$log"
+    fi
+
+    # --- 1: deliverable mirror
+    case "$fp" in
+        */output/*) ;;
+        *) exit 0 ;;
+    esac
+    proj=$(basename "${fp%%/output/*}")
+    mkdir -p "$HOME/claude-outputs"
+    cp -f "$fp" "$HOME/claude-outputs/${proj}--$(basename "$fp")"
+} >/dev/null 2>&1
+exit 0

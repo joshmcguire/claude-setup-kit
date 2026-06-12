@@ -26,12 +26,15 @@ Two or three sentences of context: why it exists, who it is for, current phase.
 - <idea> (ADR NNNN)
 - <idea> (ADR NNNN)
 
-## Key files
+## When to read deeper (trigger → file)
 
-- `docs/PRINCIPLES.md` — north star; read before architectural choices.
-- `decisions/` — the architecture of record; grep before proposing changes.
-- `CLAUDE.md` — working rules + hard rules.
-- <project-specific reference docs>
+This file plus CLAUDE.md is the working altitude. Pull a deep file only when its trigger
+matches the task; do not read them all "to be safe".
+
+- Any architectural choice → `docs/PRINCIPLES.md`, then grep `decisions/` for relevant ADRs
+- Touching <subsystem, e.g. auth> → `decisions/NNNN-<slug>.md`
+- Touching <subsystem, e.g. data model> → `decisions/NNNN-<slug>.md`
+- <task type, e.g. deploying> → `docs/<deep doc>.md`
 
 ## How to run
 

@@ -12,11 +12,18 @@ DIR="$ARG"; [ -d "$DIR" ] || DIR="$HOME/projects/$ARG"
 # Cutoff = date of the newest ADR (frontmatter date), else epoch
 CUTOFF="1970-01-01"
 if [ -d "$DIR/decisions" ]; then
-  D=$(grep -h '^date:' "$DIR"/decisions/[0-9]*.md 2>/dev/null | awk '{print $2}' | sort | tail -1 || true)
+  # filter to real YYYY-MM-DD values so 0000-template.md's literal "YYYY-MM-DD" can't win
+  D=$(grep -h '^date:' "$DIR"/decisions/[0-9]*.md 2>/dev/null | awk '{print $2}' | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' | sort | tail -1 || true)
   [ -n "${D:-}" ] && CUTOFF="$D"
 fi
 
-NEW=$(find "$DIR/transcripts" -name '[0-9][0-9][0-9][0-9]-*.md' -newermt "$CUTOFF" | sort)
+# Transcripts are dated by filename (YYYY-MM-DD-topic.md, the documented rule), so "newer"
+# is a string comparison on the name — no GNU find -newermt needed, and it stays correct
+# even if a file's mtime is touched.
+NEW=$(find "$DIR/transcripts" -name '[0-9][0-9][0-9][0-9]-*.md' | sort | while IFS= read -r f; do
+  d=$(basename "$f" | cut -c1-10)
+  [ "$d" \> "$CUTOFF" ] && printf '%s\n' "$f"
+done)
 [ -z "$NEW" ] && { echo "no transcripts newer than latest ADR ($CUTOFF)"; exit 0; }
 
 echo "mining $(echo "$NEW" | wc -l) transcript(s) newer than $CUTOFF..."

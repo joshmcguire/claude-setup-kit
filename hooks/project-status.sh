@@ -25,7 +25,8 @@ else
 fi
 
 if [ -d "$P/decisions" ]; then
-  drafts=$(grep -l '^status: draft' "$P"/decisions/[0-9]*.md 2>/dev/null | xargs -r -n1 basename)
+  drafts=$(grep -l '^status: draft' "$P"/decisions/[0-9]*.md 2>/dev/null | sed 's|.*/||' | tr '\n' ' ')
+  drafts="${drafts% }"
   [ -n "$drafts" ] && echo "Draft ADRs awaiting decision: $drafts"
 fi
 

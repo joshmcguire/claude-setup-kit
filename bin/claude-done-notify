@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Stop hook: fires when Claude Code finishes a response.
+# 1. Desktop ping with the project name (via the claude-notify shim: Linux + macOS).
+# 2. Sweep $cwd/output/ into ~/claude-outputs/ (catches Bash-produced artifacts
+#    the PostToolUse Write-hook mirror never sees — PDFs, images, pandoc, etc.)
+# 3. Linux/Hyprland only: enqueue this session's kitty window for the attention
+#    queue. Skipped automatically anywhere hyprctl or /proc is absent.
+{
+    input=$(cat)
+    cwd=$(jq -r '.cwd // empty' <<<"$input")
+    proj="${cwd##*/}"
+    command -v claude-notify >/dev/null 2>&1 && claude-notify "Claude Code done" "$proj"
+
+    # --- output sweep (anything from the last 4h, cheap + idempotent) ---
+    if [ -n "$cwd" ] && [ -d "$cwd/output" ]; then
+        mkdir -p "$HOME/claude-outputs"
+        find "$cwd/output" -maxdepth 2 -type f -mmin -240 -print0 2>/dev/null |
+            while IFS= read -r -d '' f; do
+                cp -f "$f" "$HOME/claude-outputs/${proj}--$(basename "$f")"
+            done
+    fi
+
+    # --- enqueue window for attention button (Hyprland machines only) ---
+    if command -v hyprctl >/dev/null 2>&1 && [ -r "/proc/$$/status" ]; then
+        pid=$$
+        kitty_pid=""
+        for _ in $(seq 12); do
+            pid=$(awk '/^PPid:/{print $2}' "/proc/$pid/status" 2>/dev/null)
+            [ -z "$pid" ] || [ "$pid" -le 1 ] && break
+            if [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = "kitty" ]; then
+                kitty_pid=$pid
+                break
+            fi
+        done
+        if [ -n "$kitty_pid" ]; then
+            addr=$(hyprctl clients -j | jq -r --argjson p "$kitty_pid" \
+                '.[] | select(.pid==$p) | .address' | head -1)
+            if [ -n "$addr" ]; then
+                q="${XDG_RUNTIME_DIR:-/tmp}/claude-attention-queue"
+                grep -v "^$addr|" "$q" 2>/dev/null > "$q.tmp" || true
+                echo "$addr|$proj" >> "$q.tmp"
+                mv "$q.tmp" "$q"
+            fi
+        fi
+    fi
+} >/dev/null 2>&1
+exit 0

@@ -1,5 +1,5 @@
 {
-  "_comment": "Merge the hooks key into ~/.claude/settings.json on the new machine. On Windows, replace ~ with the absolute home path using forward slashes, e.g. bash C:/Users/<you>/.claude/hooks/show-projects.sh",
+  "_comment": "Reference only — install.sh merges these into ~/.claude/settings.json automatically with absolute paths. For a manual install, merge this hooks key yourself; on Windows use an absolute path with forward slashes, e.g. bash C:/Users/<you>/.claude/hooks/show-projects.sh",
   "hooks": {
     "SessionStart": [
       {
@@ -7,11 +7,36 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash ~/.claude/hooks/show-toolkit.sh"
+          },
+          {
+            "type": "command",
             "command": "bash ~/.claude/hooks/show-projects.sh"
           },
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/project-status.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.local/bin/mirror-output"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.local/bin/claude-done-notify"
           }
         ]
       }

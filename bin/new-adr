@@ -29,4 +29,4 @@ date: $(date +%F)
 EOF
 
 echo "created $FILE"
-echo "remember: add a row to $DEC/README.md index table"
+echo "now run: adr-index   (regenerates the $DEC/README.md table)"

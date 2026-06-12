@@ -16,11 +16,13 @@ DATE="$(date +%F)"
 
 cp -r "$TPL" "$ROOT"
 
-# Fill placeholders in every template file
-find "$ROOT" -type f -name '*.md' -exec sed -i \
+# Fill placeholders in every template file. sed -i.bak (attached suffix) is the one
+# in-place form that works on both GNU and BSD/macOS sed; the .bak files are removed after.
+find "$ROOT" -type f -name '*.md' -exec sed -i.bak \
   -e "s/{{NAME}}/$(printf '%s' "$NAME" | sed 's/[&/\]/\\&/g')/g" \
   -e "s/{{DESCRIPTION}}/$(printf '%s' "$DESC" | sed 's/[&/\]/\\&/g')/g" \
   -e "s/{{DATE}}/$DATE/g" {} +
+find "$ROOT" -type f -name '*.md.bak' -exec rm -f {} +
 
 # Register: the index is generated from ONBOARDING frontmatter (which the template just
 # stamped), so regeneration IS registration. Fallback: append a row by hand.

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# claude-notify "title" "body" — cross-platform desktop notification shim.
+# Linux: notify-send. macOS: osascript. Anything else: silent no-op (never fails a hook).
+title="${1:-Claude Code}"
+body="${2:-}"
+case "$(uname -s)" in
+  Linux)
+    command -v notify-send >/dev/null 2>&1 &&
+      notify-send -t 5000 -a "Claude Code" "$title" "$body"
+    ;;
+  Darwin)
+    command -v osascript >/dev/null 2>&1 &&
+      osascript -e "display notification \"${body//\"/\\\"}\" with title \"${title//\"/\\\"}\""
+    ;;
+esac
+exit 0

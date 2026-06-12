@@ -5,7 +5,6 @@
 set -euo pipefail
 
 ROOT="$HOME/projects"
-TODAY=$(date +%s)
 ISSUES=0
 
 note() { ISSUES=$((ISSUES+1)); printf '  %s\n' "$1"; }
@@ -40,7 +39,7 @@ for d in "$ROOT"/*/; do
 
   if [ -d "$d/decisions" ]; then
     drafts=$(grep -l '^status: draft' "$d"/decisions/[0-9]*.md 2>/dev/null || true)
-    [ -n "$drafts" ] && out="$out  draft ADRs awaiting promotion: $(echo "$drafts" | xargs -n1 basename | tr '\n' ' ')\n"
+    [ -n "$drafts" ] && out="$out  draft ADRs awaiting promotion: $(echo "$drafts" | sed 's|.*/||' | tr '\n' ' ')\n"
   fi
 
   if [ -n "$out" ]; then
@@ -51,3 +50,8 @@ for d in "$ROOT"/*/; do
 done
 
 [ "$ISSUES" -eq 0 ] && echo "all projects healthy" || echo "(run project-index to refresh ~/projects.md)"
+
+# setup-kit drift: are the live copies of bin/hooks/templates/CLAUDE.md in sync with the repo?
+if command -v sync-kit >/dev/null 2>&1; then
+  sync-kit status --quiet || true
+fi
