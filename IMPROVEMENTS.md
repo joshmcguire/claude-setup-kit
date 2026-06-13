@@ -73,19 +73,40 @@ Conventions become scripts, hooks, or generated files wherever possible.**
   summary is a fact stated twice. Routing happens one level up: ONBOARDING's trigger-routed
   "When to read deeper" list, loaded context staying small, bulk reads delegated to subagents.
 
+## Shipped after launch (2026-06-12, community-audit pass)
+
+Source: a headless audit of this kit against 2025–2026 community practice (Anthropic best-
+practices/memory/long-running-agents docs, the HumanLayer CLAUDE.md essay, hook-stack
+writeups, the Spec Kit and beads critiques). The audit's finding: the structure is at or ahead
+of practice; the real gaps were all "verification and capture," not structure. Three fixes:
+
+- **Verify gate (`bin/claude-verify-gate`, Stop hook, per-project opt-in).** Folds in the old
+  open item #1 (changelog-freshness nudge). When tracked source changed since the last green
+  checkpoint, the harness runs the project's `typecheck` + `test` itself before the session
+  ends — so "tests pass" is confirmed, not asserted — then nudges once for a dated CHANGELOG
+  entry and a LEARNINGS capture. Debounced on the source diff; circuit-broken via
+  `stop_hook_active`; exits 0 (does nothing) outside a git repo or without those npm scripts.
+  Motivated by the one real false-green incident on the live app (a deploy watch looked green
+  on a failed run).
+- **LEARNINGS.md in the scaffold.** Operational gotchas had no home and were getting stranded
+  mid-CHANGELOG or pushed into machine-local memory (wrong layer by the portability rule).
+  Now an append-only repo file, surfaced at session start by `project-status.sh`, captured by
+  convention + the verify gate's prompt. Decisions compound through ADRs; now mistakes compound
+  through LEARNINGS.
+- **`/clearpoint` skill** (old open item #4). The clear-point ritual was multi-step prose
+  duplicated across CLAUDE.md files; now a command, with a one-line pointer left in `~/CLAUDE.md`.
+  Frees always-loaded instruction budget so the rules that must stay (ADR citations, hard rules)
+  get more adherence. (Issue-triage and the ADR protocol were deliberately KEPT inline: they
+  must fire automatically on every request / architectural choice, and a non-auto skill would
+  silently stop firing — the report's own caveat about unreliable skill auto-invocation.)
+
 ## Still open (worth doing once the kit is live)
 
-1. **Changelog freshness nudge as a Stop hook**: if project files changed today and no entry
-   is dated today, print a one-line stub to fill in. Nudge, never block. (The doctor catches
-   it weekly; a hook catches it in the moment.)
-2. **Automatic transcript capture**: a SessionEnd hook that files a session summary into
+1. **Automatic transcript capture**: a SessionEnd hook that files a session summary into
    `transcripts/` automatically, so mining has raw material without anyone saving notes by
    hand. Today the folder only gets what is manually dropped in.
-3. **Scheduled maintenance**: weekly `project-doctor` + `mine-transcripts` run via a scheduled
+2. **Scheduled maintenance**: weekly `project-doctor` + `mine-transcripts` run via a scheduled
    agent, filing a short report instead of waiting to be asked.
-4. **`/clearpoint` as a skill**: the clear-point ritual (save state, changelog, next-prompt
-   block, plain-English checklist) is multi-step prose in two CLAUDE.md files; a skill would
-   run it deterministically.
-5. **ONBOARDING refresh cadence**: ONBOARDING files freeze at scaffold time (the original
+3. **ONBOARDING refresh cadence**: ONBOARDING files freeze at scaffold time (the original
    machine's best project still described itself as pre-code while running in production). A
    post-ship docs-sync habit, or running the doctor's staleness check against ONBOARDING too.

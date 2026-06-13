@@ -24,6 +24,11 @@ else
   echo "  (no CHANGELOG.md yet)"
 fi
 
+if [ -f "$P/LEARNINGS.md" ]; then
+  learn=$(grep -E '^- \*\*[0-9]{4}' "$P/LEARNINGS.md" | head -2 | sed 's/^/  /')
+  [ -n "$learn" ] && { echo "Recent LEARNINGS:"; echo "$learn"; }
+fi
+
 if [ -d "$P/decisions" ]; then
   drafts=$(grep -l '^status: draft' "$P"/decisions/[0-9]*.md 2>/dev/null | sed 's|.*/||' | tr '\n' ' ')
   drafts="${drafts% }"

@@ -52,10 +52,24 @@ reconciliation model: machine-specific tweaks live below the marker and are perm
 | `IMPROVEMENTS.md` | Audit findings the design came from: what's fixed, what's still open |
 | `global-claude/CLAUDE.md` | Baseline for `~/.claude/CLAUDE.md`: style, outputs, memory discipline |
 | `home/CLAUDE.md` | Baseline for `~/CLAUDE.md`: routing, context discipline, project structure, ADR protocol, git workflow |
-| `templates/project/` | Project scaffold: CLAUDE.md, ONBOARDING, CHANGELOG, PRINCIPLES, decisions/, transcripts/ |
-| `bin/` | `new-project`, `project-index`, `new-adr`, `adr-index`, `project-doctor`, `mine-transcripts`, `sync-kit`, output pipeline (`mirror-output`, `claude-done-notify`, `log-output`), `claude-notify` (cross-platform notification shim) |
+| `templates/project/` | Project scaffold: CLAUDE.md, ONBOARDING, CHANGELOG, LEARNINGS, PRINCIPLES, decisions/, transcripts/ |
+| `bin/` | `new-project`, `project-index`, `new-adr`, `adr-index`, `project-doctor`, `mine-transcripts`, `sync-kit`, `claude-verify-gate` (per-project Stop-hook test gate), output pipeline (`mirror-output`, `claude-done-notify`, `log-output`), `claude-notify` (cross-platform notification shim) |
 | `hooks/` | SessionStart hooks: toolkit cheat sheet, project list greeting, where-we-left-off status |
-| `research/` + `commands/` | Optional `/research` command (installed by `--with-research`) |
+| `commands/` | Slash commands: `/clearpoint` (clear-point ritual), `/toolkit`, plus `/research` (gated behind `--with-research`, needs the node backend) |
+
+## The verify gate (opt-in, per project)
+
+Most projects don't need it. A live or high-stakes one does: wire `claude-verify-gate` as a
+Stop hook in that project's `.claude/settings.json` and, whenever tracked source changed, the
+harness runs the project's own `typecheck` + `test` before the session ends — turning "the agent
+says tests pass" into "the harness checked." On a clean pass it nudges once for a dated CHANGELOG
+entry and any LEARNINGS capture. It's debounced on the source diff and exits silently in repos
+without those npm scripts, so it's cheap and safe to leave wired. Enable it with:
+
+```json
+{ "hooks": { "Stop": [ { "hooks": [
+  { "type": "command", "command": "bash ~/.local/bin/claude-verify-gate" } ] } ] } }
+```
 
 ## The system in 30 seconds
 

@@ -3,6 +3,7 @@ Show the user a clean, organized list of all available custom skills and slash c
 ```
 CUSTOM COMMANDS
   /research <query>     — Web research via Claude.ai (Opus, up-to-date knowledge)
+  /clearpoint           — Run the clear-point ritual (save state + handoff at a boundary)
   /toolkit              — This list
 
 GSTACK SKILLS

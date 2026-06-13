@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# claude-verify-gate — Stop hook: a deterministic end-of-work checkpoint for a project.
+#
+# When tracked SOURCE files have changed since the last green checkpoint, it runs the
+# project's own `typecheck` and `test` npm scripts, so "the tests pass" becomes something
+# the harness confirmed rather than something the agent asserted. On a clean pass it asks
+# once (per stop-cycle) whether the CHANGELOG entry and any LEARNINGS capture are done.
+#
+# Opt-in PER PROJECT (heavy work belongs only where it earns its keep). Add to
+# <project>/.claude/settings.json:
+#   { "hooks": { "Stop": [ { "hooks": [
+#       { "type": "command", "command": "bash ~/.local/bin/claude-verify-gate" } ] } ] } }
+#
+# Safe to wire anywhere: if the cwd is not a git repo, or package.json has neither a
+# `typecheck` nor a `test` script, it exits 0 immediately and does nothing. It runs the
+# FAST gate (typecheck + the main `test` script) — the full pre-deploy suite belongs in
+# the ship flow, not here. Reads the Stop hook JSON on stdin.
+set -uo pipefail
+
+input="$(cat 2>/dev/null || true)"
+
+# Circuit breaker: if we already injected feedback this stop-cycle, let the agent stop.
+active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null || echo false)"
+[ "$active" = "true" ] && exit 0
+
+# Must be a git repo whose package.json exposes a typecheck or test script.
+root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$root" ] || exit 0
+pkg="$root/package.json"
+[ -f "$pkg" ] || exit 0
+has_script() { jq -e --arg s "$1" '.scripts[$s] // empty' "$pkg" >/dev/null 2>&1; }
+has_script typecheck || has_script test || exit 0
+
+# Any tracked SOURCE file changed in the working tree? Docs/markdown don't count, so
+# updating the CHANGELOG or LEARNINGS never re-triggers the gate.
+changed="$(cd "$root" && git status --porcelain 2>/dev/null \
+  | sed 's/^...//' \
+  | grep -vE '\.(md|mdx|txt)$' \
+  | grep -vE '(^|/)\.claude/')"
+[ -z "$changed" ] && exit 0
+
+# Debounce: skip if the source diff is identical to the last green checkpoint.
+stamp="$root/.claude/.verify-gate"
+sig="$(cd "$root" && git diff HEAD 2>/dev/null | sha1sum | awk '{print $1}')"
+[ -f "$stamp" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$sig" ] && exit 0
+
+# Run the fast gate.
+fail=""
+run() { # <script>
+  has_script "$1" || return 0
+  if ! (cd "$root" && npm run --silent "$1" >"/tmp/verify-gate.$1.log" 2>&1); then
+    fail="$fail $1"
+  fi
+}
+run typecheck
+run test
+
+if [ -n "$fail" ]; then
+  {
+    echo "✗ Verify gate FAILED:$fail — source changed since the last green checkpoint."
+    for s in $fail; do
+      echo "--- npm run $s (last 15 lines) ---"
+      tail -n 15 "/tmp/verify-gate.$s.log" 2>/dev/null
+    done
+    echo "Fix these before stopping. (User can disable: remove the Stop hook in .claude/settings.json.)"
+  } >&2
+  exit 2
+fi
+
+# Green: record the checkpoint, then run the once-per-cycle end-of-work nudges.
+mkdir -p "$root/.claude"
+printf '%s\n' "$sig" > "$stamp"
+
+today="$(date +%Y-%m-%d)"
+notes=""
+if [ -f "$root/CHANGELOG.md" ] && ! grep -q "$today" "$root/CHANGELOG.md"; then
+  notes="$notes\n  - CHANGELOG.md has no entry dated $today — add one (end with 'NEXT:' if work is unfinished)."
+fi
+notes="$notes\n  - Hit a non-obvious gotcha this session? Append it to LEARNINGS.md so it doesn't get relearned."
+
+{
+  echo "✓ Verify gate: typecheck + tests pass. Before stopping:"
+  printf '%b\n' "$notes"
+  echo "Handle the above if applicable, then stop (this check won't fire again this cycle)."
+} >&2
+exit 2

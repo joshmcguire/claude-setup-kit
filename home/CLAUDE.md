@@ -39,6 +39,7 @@ Every project folder contains:
 CLAUDE.md            # thin: what it is, stack, hard rules, pointers (1 page max)
 ONBOARDING.md        # orientation for a cold start: what, why, how to run
 CHANGELOG.md         # append-only: - **YYYY-MM-DD** — what changed and why
+LEARNINGS.md         # append-only: operational gotchas (not decisions, not history)
 docs/PRINCIPLES.md   # mission + non-negotiable values for THIS project
 decisions/           # ADRs: NNNN-slug.md + README.md index (the architecture of record)
 transcripts/         # dated meeting/voice notes: YYYY-MM-DD-topic.md (mined for decisions)
@@ -50,7 +51,8 @@ transcripts/         # dated meeting/voice notes: YYYY-MM-DD-topic.md (mined for
   description).
 - **File ownership (prevents drift):** CLAUDE.md = rules only, no codebase facts, ~80 lines
   max. ONBOARDING.md = facts + the index frontmatter (name/description/status). PRINCIPLES =
-  values. A fact stated twice is a fact that rots; pick its one home.
+  values. CHANGELOG = history. LEARNINGS = operational gotchas (the trap + the rule that avoids
+  it; not decisions, not history). A fact stated twice is a fact that rots; pick its one home.
 - **Superseding a project:** set `status: superseded by <slug>` in the old project's
   ONBOARDING frontmatter, add a one-line banner at the top of its CLAUDE.md pointing to the
   replacement, run `project-index`.
@@ -101,6 +103,14 @@ transcripts/         # dated meeting/voice notes: YYYY-MM-DD-topic.md (mined for
 - This is the resume-point for the next session. If it is not in the CHANGELOG, an ADR, or a
   commit, it did not happen.
 
+## LEARNINGS
+
+- When a non-obvious gotcha costs time (a tooling trap, a race, a "looked green but wasn't"),
+  append it to the project's `LEARNINGS.md`: `- **YYYY-MM-DD** — the trap, then the rule that
+  avoids it`. Newest on top. Do this without being asked; it is how mistakes stop recurring.
+- LEARNINGS is for operational traps, not decisions (those are ADRs) or history (that is the
+  CHANGELOG). Read it at session start alongside the CHANGELOG.
+
 ## Behavior
 
 - Do the full job: run commands, fix failures, then report. Do not hand back commands to run.
@@ -113,13 +123,16 @@ transcripts/         # dated meeting/voice notes: YYYY-MM-DD-topic.md (mined for
 ## Clear points
 
 - Proactively offer a `/clear` at genuine boundaries (task finished and committed, or a
-  design→code mode switch), never mid-task. Before offering, make sure state is saved
-  (commit + CHANGELOG + any ADR).
-- Every clear-point offer includes: (1) a ready-to-paste **next prompt** in its own code block,
-  self-contained enough for a cold session (what we are resuming, where state lives, exact next
-  step), and (2) a **"Before you clear"** list in plain product-owner English (no jargon, paths,
-  or commands): what to check or approve first, and any open decisions framed as product
-  choices with a recommendation.
+  design→code mode switch), never mid-task. At that boundary run the **`/clearpoint`** skill —
+  it saves state (commit + CHANGELOG + any ADR + LEARNINGS) and emits the next-prompt block plus
+  the plain-English "Before you clear" checklist. Don't paraphrase the ritual from memory; run it.
+
+## Verify gate (per-project, opt-in)
+
+- A live or otherwise high-stakes project can wire `claude-verify-gate` as a Stop hook in its
+  `.claude/settings.json`: when source changed, the harness runs the project's typecheck + fast
+  test itself before the session ends, so "tests pass" is confirmed, not asserted. Off by
+  default; turn it on where a wrong green is expensive.
 
 <!-- ===== MACHINE-SPECIFIC BELOW: sync-kit compares only above this line ===== -->
 

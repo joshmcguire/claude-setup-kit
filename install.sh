@@ -146,7 +146,18 @@ say "project index -> ~/projects.md"
 mkdir -p "$HOME/.config/claude-setup-kit"
 printf '%s\n' "$KIT" > "$HOME/.config/claude-setup-kit/path"
 
-# --- 8. optional: /research command -----------------------------------------
+# --- 8. standalone slash commands (no backend needed) -----------------------
+# These are plain prompt files; install them always. /research is gated below
+# because it also needs the node research backend.
+mkdir -p "$HOME/.claude/commands"
+for f in "$KIT"/commands/*.md; do
+  base="$(basename "$f")"
+  [ "$base" = "research.md" ] && continue
+  cp "$f" "$HOME/.claude/commands/$base"
+done
+say "slash commands -> ~/.claude/commands ($(ls "$KIT"/commands | grep -v '^research.md$' | tr '\n' ' '))"
+
+# --- 8b. optional: /research command ----------------------------------------
 if [ "$WITH_RESEARCH" -eq 1 ]; then
   if command -v npm >/dev/null 2>&1; then
     mkdir -p "$HOME/.claude/research" "$HOME/.claude/commands"

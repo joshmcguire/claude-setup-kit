@@ -35,6 +35,7 @@ decision: new ADR that supersedes the old one (never rewrite history). Keep the 
 ## Working style
 
 - Append to `CHANGELOG.md`: `- **YYYY-MM-DD** — what changed and why`.
+- Append non-obvious gotchas to `LEARNINGS.md` (the trap + the rule that avoids it).
 - Commit policy: <auto-commit at working checkpoints | only when asked>.
 - Branching: <main-only pre-deploy | branch-per-issue feat/<#>-slug, PR with Closes #, main
   always deployable>.

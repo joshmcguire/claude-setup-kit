@@ -43,6 +43,10 @@ pairs() {
     case "$f" in */show-toolkit.sh) continue ;; esac
     printf 'full\t%s\t%s\n' "$f" "$HOME/.claude/hooks/$(basename "$f")"
   done
+  for f in "$KIT"/commands/*.md; do
+    [ -f "$f" ] || continue
+    printf 'full\t%s\t%s\n' "$f" "$HOME/.claude/commands/$(basename "$f")"
+  done
   if [ -d "$KIT/templates/project" ]; then
     find "$KIT/templates/project" -type f | while IFS= read -r f; do
       rel="${f#"$KIT"/templates/project/}"
