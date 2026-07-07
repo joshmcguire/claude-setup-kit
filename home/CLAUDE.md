@@ -120,6 +120,14 @@ transcripts/         # dated meeting/voice notes: YYYY-MM-DD-topic.md (mined for
 - Prompts arrive via voice-to-text; interpret intent, ignore typos.
 - Be concise.
 
+## Reuse before build
+
+- If a finished task involved hand-building a reusable capability (pipeline, integration,
+  converter, tool), you MAY close with a one-line note suggesting a skill check: installed/gstack
+  first, then github.com/anthropics/skills, then community marketplaces as an unvetted lead.
+  Post-task and forward-looking only — skip for one-offs, never interrupt, never refactor working
+  code to adopt a skill.
+
 ## Clear points
 
 - Proactively offer a `/clear` at genuine boundaries (task finished and committed, or a
