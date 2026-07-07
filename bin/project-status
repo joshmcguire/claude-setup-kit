@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# project-status
+# Where-everything-is-at, computed cheaply from each project's own files so a session can
+# resume without re-reading the whole repo. Two modes:
+#
+#   project-status            Dashboard: every active project, newest activity first, each with
+#                             its NEXT step (or last CHANGELOG line), git state, and open-decision
+#                             markers. Feeds the /projects command, which groups it into families.
+#   project-status <name>     One project's resume block: status, last ~8 CHANGELOG entries, NEXT,
+#                             recent LEARNINGS, draft ADRs, git branch/dirty, newest transcript.
+#                             <name> may be a dir slug (~/projects/<name>) or a fuzzy index name.
+#
+# Source of truth: ~/projects.md (generated) + each project's CHANGELOG/LEARNINGS/decisions/.git.
+# Never hand-edit ~/projects.md; fix ONBOARDING frontmatter and run project-index.
+set -u
+
+ROOT="$HOME/projects"
+INDEX="$HOME/projects.md"
+
+# portable mtime/date helpers: GNU (Linux) vs BSD (macOS) flags differ
+mtime_of() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
+date_of_ts() { date -d "@$1" +%Y-%m-%d 2>/dev/null || date -r "$1" +%Y-%m-%d 2>/dev/null || echo '----------'; }
+
+# recency_ts <dir> -> newest of CHANGELOG mtime / last git commit / dir mtime (matches the picker)
+recency_ts() {
+  local dir="$1" ts=0 g
+  [ -f "$dir/CHANGELOG.md" ] && ts=$(mtime_of "$dir/CHANGELOG.md")
+  if [ -d "$dir/.git" ]; then
+    g=$(git -C "$dir" log -1 --format=%ct 2>/dev/null || echo 0)
+    [ "$g" -gt "$ts" ] && ts=$g
+  fi
+  [ "$ts" -eq 0 ] && ts=$(mtime_of "$dir")
+  echo "$ts"
+}
+
+# last_changelog_line <dir> -> the most recent "- **YYYY-MM-DD** — ..." entry, trimmed
+last_changelog_line() {
+  grep -E '^- \*\*[0-9]{4}-[0-9]{2}-[0-9]{2}\*\*' "$1/CHANGELOG.md" 2>/dev/null | tail -1
+}
+
+# next_marker <dir> -> the last "NEXT: ..." marker if any
+next_marker() {
+  grep -oE 'NEXT:.*' "$1/CHANGELOG.md" 2>/dev/null | tail -1
+}
+
+# git_flag <dir> -> "main ●3" (branch + uncommitted count) or empty if not a repo
+git_flag() {
+  [ -d "$1/.git" ] || return 0
+  local br dirty
+  br=$(git -C "$1" branch --show-current 2>/dev/null)
+  dirty=$(git -C "$1" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$dirty" -gt 0 ]; then echo "${br} ●${dirty}"; else echo "${br}"; fi
+}
+
+# draft_count <dir> -> number of draft ADRs awaiting sign-off
+draft_count() {
+  [ -d "$1/decisions" ] || { echo 0; return; }
+  grep -l '^status: draft' "$1"/decisions/[0-9]*.md 2>/dev/null | wc -l | tr -d ' '
+}
+
+# strip a CHANGELOG line down to its prose: drop "- **DATE** — " / "- **DATE** - "
+clean_line() {
+  echo "$1" | sed -E 's/^- \*\*[0-9-]+\*\* +[—-] *//; s/^- \*\*[0-9-]+\*\* *//'
+}
+
+# resolve_dir <name> -> absolute project dir, or empty. Tries slug, then fuzzy index-name match.
+resolve_dir() {
+  local q="$1"
+  if [ -d "$ROOT/$q" ]; then echo "$ROOT/$q"; return; fi
+  # fuzzy: match the index "Name" column (case-insensitive substring) -> its path
+  local path
+  path=$(awk -F'|' -v q="${q,,}" '
+    /^\|/ && !/^\|---/ {
+      name=$2; gsub(/^ +| +$/, "", name)
+      p=$3; gsub(/^ +| +$|`/, "", p)
+      lname=tolower(name)
+      if (name!="" && name!="Project" && index(lname, q)) { print p; exit }
+    }' "$INDEX")
+  [ -n "$path" ] && echo "$path" | sed "s|^~|$HOME|; s|/$||"
+}
+
+# ---- per-project resume block -------------------------------------------------------------
+project_block() {
+  local P="$1" name; name="$(basename "$P")"
+  echo "Resuming: $name"
+  echo "Path: ${P/#$HOME/~}"
+
+  if [ -f "$P/ONBOARDING.md" ]; then
+    local st; st=$(awk -F': *' '/^status:/ {print $2; exit}' "$P/ONBOARDING.md")
+    [ -n "$st" ] && echo "Status: $st"
+  fi
+
+  if [ -f "$P/CHANGELOG.md" ]; then
+    echo
+    echo "Last CHANGELOG entries:"
+    grep -E '^- \*\*[0-9]{4}' "$P/CHANGELOG.md" | tail -8 | sed 's/^/  /'
+    local nx; nx=$(next_marker "$P")
+    [ -n "$nx" ] && { echo; echo "  >> $nx"; }
+  else
+    echo "  (no CHANGELOG.md yet)"
+  fi
+
+  if [ -f "$P/LEARNINGS.md" ]; then
+    local lr; lr=$(grep -E '^- \*\*[0-9]{4}' "$P/LEARNINGS.md" | head -2 | sed 's/^/  /')
+    [ -n "$lr" ] && { echo; echo "Recent LEARNINGS:"; echo "$lr"; }
+  fi
+
+  if [ -d "$P/decisions" ]; then
+    local drafts
+    drafts=$(grep -l '^status: draft' "$P"/decisions/[0-9]*.md 2>/dev/null | sed 's|.*/||' | tr '\n' ' ')
+    drafts="${drafts% }"
+    [ -n "$drafts" ] && { echo; echo "Draft ADRs awaiting decision: $drafts"; }
+  fi
+
+  if [ -d "$P/.git" ]; then
+    local br dirty
+    br=$(git -C "$P" branch --show-current 2>/dev/null)
+    dirty=$(git -C "$P" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    echo
+    echo "Git: branch $br, $dirty uncommitted change(s)"
+  fi
+
+  if [ -d "$P/transcripts" ]; then
+    local t; t=$(ls "$P/transcripts" 2>/dev/null | grep -E '^[0-9]{4}-' | sort | tail -1)
+    [ -n "$t" ] && echo "Newest transcript: $t (mine it if not yet mined)"
+  fi
+}
+
+# ---- dashboard ----------------------------------------------------------------------------
+dashboard() {
+  echo "# Projects — where everything is at (newest activity first)"
+  echo "# fields: <date>  <slug>  [git]  {drafts}  — NEXT/last"
+  echo
+  # Pull active-table slug+path from the index, enrich, sort by recency desc.
+  awk -F'|' '
+    /^## Active/ { a=1; next }
+    /^## / && a { exit }
+    a && /^\|/ && !/^\|---/ {
+      name=$2; gsub(/^ +| +$/, "", name)
+      p=$3; gsub(/^ +| +$|`/, "", p)
+      if (name!="" && name!="Project") print p
+    }' "$INDEX" | while read -r p; do
+      dir="${p/#\~/$HOME}"; dir="${dir%/}"
+      [ -d "$dir" ] || continue
+      ts=$(recency_ts "$dir")
+      printf '%s\t%s\n' "$ts" "$dir"
+  done | sort -rn | while IFS=$'\t' read -r ts dir; do
+      slug="$(basename "$dir")"
+      date=$(date_of_ts "$ts")
+      gf=$(git_flag "$dir"); [ -n "$gf" ] && gf="[$gf] "
+      dc=$(draft_count "$dir"); [ "$dc" -gt 0 ] && dc="{✎$dc draft ADR} " || dc=""
+      nx=$(next_marker "$dir")
+      if [ -n "$nx" ]; then
+        tail_txt="$nx"
+      else
+        tail_txt="last: $(clean_line "$(last_changelog_line "$dir")")"
+      fi
+      # keep each line compact
+      printf '%s  %-22s %s%s— %s\n' "$date" "$slug" "$gf" "$dc" "$tail_txt"
+  done
+}
+
+# ---- dispatch -----------------------------------------------------------------------------
+if [ "$#" -eq 0 ]; then
+  dashboard
+  exit 0
+fi
+
+DIR="$(resolve_dir "$1")"
+if [ -z "$DIR" ] || [ ! -d "$DIR" ]; then
+  echo "No project matched '$1'. Known projects:" >&2
+  ls -1 "$ROOT" 2>/dev/null | sed 's/^/  /' >&2
+  exit 1
+fi
+project_block "$DIR"
