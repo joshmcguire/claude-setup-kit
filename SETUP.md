@@ -95,3 +95,18 @@ Copy `bin/*` → `~/.local/bin/` (+`chmod +x`), `hooks/*.sh` → `~/.claude/hook
 - Weekly (or when asked for a health check): `project-doctor` — it now also reports setup-kit
   drift via `sync-kit status`.
 - ONBOARDING.md is allowed to lag; CLAUDE.md, PRINCIPLES, and ADRs are not.
+
+## Fleet doctrine (owned elsewhere — pointer only)
+
+Fleet orchestration doctrine and tooling (ORCA.md protocol, FABLE/NARRATOR seat charters,
+fleet-claim/fleet-gate/orca-lane) are OWNED by the private `joshmcguire/orca` repo — not
+this kit (owner ruling 2026-08-01, orca#1: doctrine changes daily, rebuilds happen yearly;
+one home per file). On a machine rebuild, after the steps above:
+
+```bash
+git clone git@github.com:joshmcguire/orca.git ~/projects/orca
+bash ~/projects/orca/bin/install-symlinks.sh   # idempotent; refuses to clobber real files
+```
+
+This kit never carries copies of those files. Its `home/CLAUDE.md` snapshot references
+them by path only; sync-kit handles that file's normal drift.
